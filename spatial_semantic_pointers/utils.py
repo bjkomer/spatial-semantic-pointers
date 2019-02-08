@@ -116,3 +116,27 @@ def generate_region_vector(desired, xs, ys, x_axis_sp, y_axis_sp):
     sp.normalize()
 
     return sp
+
+
+def ssp_to_loc(sp, heatmap_vectors, xs, ys):
+    """
+    Convert an SSP to the approximate location that it represents.
+    Uses the heatmap vectors as a lookup table
+    :param sp: the semantic pointer of interest
+    :param heatmap_vectors: SSP for every point in the space defined by xs and ys
+    :param xs: linspace in x
+    :param ys: linspace in y
+    :return: 2D coordinate that the SSP most closely represents
+    """
+
+    if sp.__class__.__name__ == 'SemanticPointer':
+        vs = np.tensordot(sp.v, heatmap_vectors, axes=([0], [2]))
+    else:
+        vs = np.tensordot(sp, heatmap_vectors, axes=([0], [2]))
+
+    xy = np.unravel_index(vs.argmax(), vs.shape)
+
+    x = xs[xy[0]]
+    y = ys[xy[1]]
+
+    return x, y
