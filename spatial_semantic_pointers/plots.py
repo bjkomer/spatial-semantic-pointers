@@ -121,7 +121,7 @@ def plot_predictions(predictions, coords, ax, min_val=-1, max_val=1):
     return ax
 
 
-def plot_heatmap(vec, heatmap_vectors, ax, xs, ys, name='', vmin=-1, vmax=1, cmap='plasma'):
+def plot_heatmap(vec, heatmap_vectors, ax, xs, ys, name='', vmin=-1, vmax=1, cmap='plasma', invert=False):
     # vs = np.dot(vec, heatmap_vectors)
     # vec has shape (dim) and heatmap_vectors have shape (xs, ys, dim) so the result will be (xs, ys)
     vs = np.tensordot(vec, heatmap_vectors, axes=([0], [2]))
@@ -129,9 +129,18 @@ def plot_heatmap(vec, heatmap_vectors, ax, xs, ys, name='', vmin=-1, vmax=1, cma
     if cmap == 'diverging':
         cmap = sns.diverging_palette(150, 275, s=80, l=55, as_cmap=True)
 
-    # TODO: allow the 'extent' to be changed with a parameter
-    img = ax.imshow(vs, interpolation='none', extent=(xs[0], xs[-1], ys[0], ys[-1]), vmin=vmin, vmax=vmax, cmap=cmap)
+    if invert:
+        img = ax.imshow(vs, interpolation='none', extent=(xs[0], xs[-1], ys[0], ys[-1]), vmin=vmin, vmax=vmax, cmap=cmap)
+    else:
+        img = ax.imshow(vs, origin='lower', interpolation='none', extent=(xs[0], xs[-1], ys[0], ys[-1]), vmin=vmin, vmax=vmax, cmap=cmap)
 
     ax.set_title(name)
 
     return img
+
+
+def plot_vocab_similarity(vec, vocab_vectors, ax):
+
+    sim = np.tensordot(vec, vocab_vectors, axes=([0], [1]))
+
+    ax.bar(x=np.arange(len(sim)), height=sim, width=0.8)
