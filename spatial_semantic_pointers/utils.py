@@ -117,7 +117,7 @@ def ssp_to_loc(sp, heatmap_vectors, xs, ys):
     x = xs[xy[0]]
     y = ys[xy[1]]
 
-    return x, y
+    return np.array([x, y])
 
 
 ####################
