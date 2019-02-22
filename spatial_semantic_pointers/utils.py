@@ -124,7 +124,7 @@ def ssp_to_loc(sp, heatmap_vectors, xs, ys):
 # Region Functions #
 ####################
 
-def generate_region_vector(desired, xs, ys, x_axis_sp, y_axis_sp):
+def generate_region_vector(desired, xs, ys, x_axis_sp, y_axis_sp, normalize=True):
     """
     :param desired: occupancy grid of what points should be in the region and which ones should not be
     :param xs: linspace in x
@@ -141,7 +141,9 @@ def generate_region_vector(desired, xs, ys, x_axis_sp, y_axis_sp):
                 vector += encode_point(x, y, x_axis_sp, y_axis_sp).v
 
     sp = nengo.spa.SemanticPointer(data=vector)
-    sp.normalize()
+
+    if normalize:
+        sp.normalize()
 
     return sp
 
@@ -156,10 +158,10 @@ def circular_region(xs, ys, radius=1, x_offset=0, y_offset=0):
     return region
 
 
-def generate_circular_region_vector(xs, ys, x_axis_sp, y_axis_sp, radius=1, x_offset=0, y_offset=0):
+def generate_circular_region_vector(xs, ys, x_axis_sp, y_axis_sp, radius=1, x_offset=0, y_offset=0, normalize=True):
     return generate_region_vector(
         desired=circular_region(xs, ys, radius=radius, x_offset=x_offset, y_offset=y_offset),
-        xs=xs, ys=ys, x_axis_sp=x_axis_sp, y_axis_sp=y_axis_sp,
+        xs=xs, ys=ys, x_axis_sp=x_axis_sp, y_axis_sp=y_axis_sp, normalize=normalize,
     )
 
 
@@ -180,10 +182,10 @@ def elliptic_region(xs, ys, f1, f2, diameter=1):
     return region
 
 
-def generate_elliptic_region_vector(xs, ys, x_axis_sp, y_axis_sp, f1, f2, diameter=1):
+def generate_elliptic_region_vector(xs, ys, x_axis_sp, y_axis_sp, f1, f2, diameter=1, normalize=True):
     return generate_region_vector(
         desired=elliptic_region(xs, ys, f1=f1, f2=f2, diameter=diameter),
-        xs=xs, ys=ys, x_axis_sp=x_axis_sp, y_axis_sp=y_axis_sp,
+        xs=xs, ys=ys, x_axis_sp=x_axis_sp, y_axis_sp=y_axis_sp, normalize=normalize,
     )
 
 
@@ -210,8 +212,8 @@ def arc_region(xs, ys, arc_center, arc_width, x_offset=0, y_offset=0):
     return region
 
 
-def generate_arc_region_vector(xs, ys, x_axis_sp, y_axis_sp, arc_center, arc_width, x_offset=0, y_offset=0):
+def generate_arc_region_vector(xs, ys, x_axis_sp, y_axis_sp, arc_center, arc_width, x_offset=0, y_offset=0, normalize=True):
     return generate_region_vector(
         desired=arc_region(xs, ys, arc_center=arc_center, arc_width=arc_width, x_offset=x_offset, y_offset=y_offset),
-        xs=xs, ys=ys, x_axis_sp=x_axis_sp, y_axis_sp=y_axis_sp,
+        xs=xs, ys=ys, x_axis_sp=x_axis_sp, y_axis_sp=y_axis_sp, normalize=normalize,
     )
