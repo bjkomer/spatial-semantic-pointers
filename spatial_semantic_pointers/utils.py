@@ -226,8 +226,8 @@ def encode_random(x, y, dim=512, convert_to_sp=False):
     """
     # convert x and y into a single float
     f = x * 1000 + y
-    # convert the float into an integer to be used as a seed
-    seed = struct.unpack('>l', struct.pack('>f', f))[0]
+    # convert the float into an unsigned integer to be used as a seed
+    seed = struct.unpack('>I', struct.pack('>f', f))[0]
     rstate = np.random.RandomState(seed)
     vec = rstate.normal(size=dim)
     vec = vec / np.linalg.norm(vec)
