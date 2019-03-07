@@ -1,5 +1,6 @@
 import numpy as np
 import nengo
+import struct
 
 
 def power(s, e):
@@ -217,3 +218,20 @@ def generate_arc_region_vector(xs, ys, x_axis_sp, y_axis_sp, arc_center, arc_wid
         desired=arc_region(xs, ys, arc_center=arc_center, arc_width=arc_width, x_offset=x_offset, y_offset=y_offset),
         xs=xs, ys=ys, x_axis_sp=x_axis_sp, y_axis_sp=y_axis_sp, normalize=normalize,
     )
+
+
+def encode_random(x, y, dim=512, convert_to_sp=False):
+    """
+    Used for comparison with SSPs. A deterministic random encoding of a location to a semantic pointer
+    """
+    # convert x and y into a single float
+    f = x * 1000 + y
+    # convert the float into an integer to be used as a seed
+    seed = struct.unpack('>l', struct.pack('>f', f))[0]
+    rstate = np.random.RandomState(seed)
+    vec = rstate.normal(size=dim)
+    vec = vec / np.linalg.norm(vec)
+    if convert_to_sp:
+        return nengo.spa.SemanticPointer(data=vec)
+    else:
+        return vec
