@@ -121,6 +121,27 @@ def plot_predictions(predictions, coords, ax, min_val=-1, max_val=1):
     return ax
 
 
+def plot_predictions_v(predictions, coords, ax, min_val=-1, max_val=1):
+    """
+    vectorized version of 'plot_predictions'
+    plot predictions, and colour them based on their true coords
+    both predictions and coords are (n_samples, 2) vectors
+    """
+
+    n_samples = predictions.shape[0]
+    r = np.clip(coords[:, 0] - min_val / (max_val - min_val), 0, 1).reshape(n_samples, 1)
+    g = np.zeros((coords.shape[0], 1))
+    b = np.clip(coords[:, 1] - min_val / (max_val - min_val), 0, 1).reshape(n_samples, 1)
+
+    colours = np.hstack([r, g, b])
+
+    assert(colours.shape[0] == r.shape[0])
+
+    ax.scatter(x=predictions[:, 0], y=predictions[:, 1], c=colours)
+
+    return ax
+
+
 def plot_heatmap(vec, heatmap_vectors, ax, xs, ys, name='', vmin=-1, vmax=1, cmap='plasma', invert=False):
     # vs = np.dot(vec, heatmap_vectors)
     # vec has shape (dim) and heatmap_vectors have shape (xs, ys, dim) so the result will be (xs, ys)

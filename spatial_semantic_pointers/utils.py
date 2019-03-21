@@ -121,6 +121,50 @@ def ssp_to_loc(sp, heatmap_vectors, xs, ys):
     return np.array([x, y])
 
 
+def ssp_to_loc_v(sps, heatmap_vectors, xs, ys):
+    """
+    vectorized version of ssp_to_loc
+    Convert an SSP to the approximate location that it represents.
+    Uses the heatmap vectors as a lookup table
+    :param sps: array of spatial semantic pointers of interest
+    :param heatmap_vectors: SSP for every point in the space defined by xs and ys
+    :param xs: linspace in x
+    :param ys: linspace in y
+    :return: array of the 2D coordinates that the SSP most closely represents
+    """
+
+    assert(len(sps.shape) == 2)
+    assert(len(heatmap_vectors.shape) == 3)
+    assert(sps.shape[1] == heatmap_vectors.shape[2])
+
+    res_x = heatmap_vectors.shape[0]
+    res_y = heatmap_vectors.shape[1]
+    dim = heatmap_vectors.shape[2]
+    n_samples = sps.shape[0]
+
+    # Compute the dot product of every semantic pointer with every element in the heatmap
+    # vs will be of shape (n_samples, res_x, res_y)
+    vs = np.tensordot(sps, heatmap_vectors, axes=([-1], [2]))
+
+    # Find the x and y indices for every sample. xys is a list of two elements.
+    # Each element in a numpy array of shape (n_samples,)
+    xys = np.unravel_index(vs.reshape((dim, res_x*res_y)).argmax(axis=1), (res_x, res_y))
+
+    # Transform into an array containing coordinates
+    # locs will be of shape (n_samples, 2)
+    locs = np.vstack([xs[xys[0]], ys[xys[1]]]).T
+
+    assert(locs.shape[0] == n_samples)
+    assert(locs.shape[1] == 2)
+
+    return locs
+
+    # x = xs[xy[0]]
+    # y = ys[xy[1]]
+    #
+    # return np.array([x, y])
+
+
 ####################
 # Region Functions #
 ####################
