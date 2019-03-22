@@ -148,7 +148,8 @@ def ssp_to_loc_v(sps, heatmap_vectors, xs, ys):
 
     # Find the x and y indices for every sample. xys is a list of two elements.
     # Each element in a numpy array of shape (n_samples,)
-    xys = np.unravel_index(vs.reshape((dim, res_x*res_y)).argmax(axis=1), (res_x, res_y))
+    # xys = np.unravel_index(vs.reshape((dim, res_x*res_y)).argmax(axis=1), (res_x, res_y))
+    xys = np.unravel_index(vs.reshape((n_samples, res_x * res_y)).argmax(axis=1), (res_x, res_y))
 
     # Transform into an array containing coordinates
     # locs will be of shape (n_samples, 2)
