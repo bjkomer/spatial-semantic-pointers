@@ -129,9 +129,9 @@ def plot_predictions_v(predictions, coords, ax, min_val=-1, max_val=1):
     """
 
     n_samples = predictions.shape[0]
-    r = np.clip(coords[:, 0] - min_val / (max_val - min_val), 0, 1).reshape(n_samples, 1)
+    r = np.clip((coords[:, 0] - min_val) / (max_val - min_val), 0, 1).reshape(n_samples, 1)
     g = np.zeros((coords.shape[0], 1))
-    b = np.clip(coords[:, 1] - min_val / (max_val - min_val), 0, 1).reshape(n_samples, 1)
+    b = np.clip((coords[:, 1] - min_val) / (max_val - min_val), 0, 1).reshape(n_samples, 1)
 
     colours = np.hstack([r, g, b])
 
