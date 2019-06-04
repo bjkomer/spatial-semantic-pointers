@@ -22,10 +22,15 @@ class SpatialCleanup(object):
         self.model = FeedForward(dim=dim, hidden_size=hidden_size, output_size=dim)
         self.model.load_state_dict(torch.load(model_path), strict=True)
 
-    def __call__(self, x, t):
+    def __call__(self, t, x):
 
         # Run SSP through the network, including conversions to and from pytorch tensors
-        return self.model(torch.Tensor(x).unsqueeze(0)).detach().numpy()[0, :]
+        output = self.model(torch.Tensor(x).unsqueeze(0)).detach().numpy()
+        mag = np.linalg.norm(output)
+        if mag > 0:
+            return output / np.linalg.norm(output)
+        else:
+            return output
 
 
 class CoordDecodeDataset(data.Dataset):
