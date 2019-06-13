@@ -1,5 +1,5 @@
 import nengo
-import nengo.spa as spa
+import nengo_spa as spa
 import numpy as np
 from spatial_semantic_pointers.plots import SpatialHeatmap
 from spatial_semantic_pointers.utils import make_good_unitary, get_heatmap_vectors, encode_point
@@ -88,12 +88,10 @@ class Environment(object):
 
             output += encode_point(x_pos, y_pos, self.x_axis_sp, self.y_axis_sp) * spa.SemanticPointer(data=self.vocab_vectors[identity])
 
-        output.normalize()
-
-        return output.v
+        return output.normalized().v
 
 
-model = spa.SPA(seed=seed)
+model = nengo.Network(seed=seed)
 
 with model:
 
