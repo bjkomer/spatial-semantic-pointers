@@ -8,7 +8,7 @@ import os
 seed = 13
 dim = 512
 limit = 5
-res = 128 #256
+res = 32  # 256
 neurons_per_dim = 10
 
 n_items = 5
@@ -30,7 +30,7 @@ for i in range(n_items):
     p = vocab.create_pointer()
     vocab_vectors[i, :] = p.v
 
-fname = 'heatmap_vectors_{}items_dim{}_seed{}'.format(n_items, dim, seed)
+fname = 'heatmap_vectors_{}items_dim{}_res{}_seed{}'.format(n_items, dim, res, seed)
 if os.path.exists(fname):
     print("Loading heatmap vectors")
     data = np.load(fname)
