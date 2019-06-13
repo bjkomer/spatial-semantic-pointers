@@ -139,7 +139,6 @@ def ssp_to_loc_v(sps, heatmap_vectors, xs, ys):
 
     res_x = heatmap_vectors.shape[0]
     res_y = heatmap_vectors.shape[1]
-    dim = heatmap_vectors.shape[2]
     n_samples = sps.shape[0]
 
     # Compute the dot product of every semantic pointer with every element in the heatmap
@@ -148,7 +147,6 @@ def ssp_to_loc_v(sps, heatmap_vectors, xs, ys):
 
     # Find the x and y indices for every sample. xys is a list of two elements.
     # Each element in a numpy array of shape (n_samples,)
-    # xys = np.unravel_index(vs.reshape((dim, res_x*res_y)).argmax(axis=1), (res_x, res_y))
     xys = np.unravel_index(vs.reshape((n_samples, res_x * res_y)).argmax(axis=1), (res_x, res_y))
 
     # Transform into an array containing coordinates
@@ -159,11 +157,6 @@ def ssp_to_loc_v(sps, heatmap_vectors, xs, ys):
     assert(locs.shape[1] == 2)
 
     return locs
-
-    # x = xs[xy[0]]
-    # y = ys[xy[1]]
-    #
-    # return np.array([x, y])
 
 
 ####################

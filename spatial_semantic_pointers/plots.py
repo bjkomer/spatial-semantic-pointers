@@ -28,7 +28,7 @@ def image_svg(arr):
             <svg width="100%%" height="100%%" viewbox="0 0 100 100">
             <image width="100%%" height="100%%"
                    xlink:href="data:image/png;base64,%s"
-                   style="image-rendering: pixelated;">
+                   style="image-rendering: pixelated;"/>
             </svg>''' % (''.join(img_str))
 
     else:
