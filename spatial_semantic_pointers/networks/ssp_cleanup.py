@@ -208,7 +208,6 @@ def main():
         noisy_ssps = data['noisy_ssps']
     else:
         print("Generating SSP cleanup dataset")
-        # TODO: save the dataset the first time it is created, so it can be loaded the next time
         clean_ssps, noisy_ssps, coords = generate_cleanup_dataset(
             x_axis_sp=x_axis_sp,
             y_axis_sp=y_axis_sp,
@@ -285,7 +284,7 @@ def main():
             mse_loss = mse_criterion(outputs, clean)
             # Modified to use CosineEmbeddingLoss
             cosine_loss = cosine_criterion(outputs, clean, torch.ones(args.batch_size))
-            # print(loss.data.item())
+
             avg_cosine_loss += cosine_loss.data.item()
             avg_mse_loss += mse_loss.data.item()
             n_batches += 1

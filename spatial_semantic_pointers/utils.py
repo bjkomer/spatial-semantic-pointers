@@ -1,11 +1,12 @@
 import numpy as np
 import nengo
+import nengo_spa as spa
 import struct
 
 
 def power(s, e):
     x = np.fft.ifft(np.fft.fft(s.v) ** e).real
-    return nengo.spa.SemanticPointer(data=x)
+    return spa.SemanticPointer(data=x)
 
 
 def encode_point(x, y, x_axis_sp, y_axis_sp):
@@ -50,7 +51,7 @@ def make_good_unitary(dim, eps=1e-3, rng=np.random):
     v = v.real
     assert np.allclose(np.fft.fft(v), fv)
     assert np.allclose(np.linalg.norm(v), 1)
-    return nengo.spa.SemanticPointer(v)
+    return spa.SemanticPointer(v)
 
 
 def get_heatmap_vectors(xs, ys, x_axis_sp, y_axis_sp):
@@ -62,8 +63,8 @@ def get_heatmap_vectors(xs, ys, x_axis_sp, y_axis_sp):
         dim = len(x_axis_sp.v)
     else:
         dim = len(x_axis_sp)
-        x_axis_sp = nengo.spa.SemanticPointer(data=x_axis_sp)
-        y_axis_sp = nengo.spa.SemanticPointer(data=y_axis_sp)
+        x_axis_sp = spa.SemanticPointer(data=x_axis_sp)
+        y_axis_sp = spa.SemanticPointer(data=y_axis_sp)
 
     vectors = np.zeros((len(xs), len(ys), dim))
 
@@ -139,7 +140,6 @@ def ssp_to_loc_v(sps, heatmap_vectors, xs, ys):
 
     res_x = heatmap_vectors.shape[0]
     res_y = heatmap_vectors.shape[1]
-    dim = heatmap_vectors.shape[2]
     n_samples = sps.shape[0]
 
     # Compute the dot product of every semantic pointer with every element in the heatmap
@@ -148,7 +148,6 @@ def ssp_to_loc_v(sps, heatmap_vectors, xs, ys):
 
     # Find the x and y indices for every sample. xys is a list of two elements.
     # Each element in a numpy array of shape (n_samples,)
-    # xys = np.unravel_index(vs.reshape((dim, res_x*res_y)).argmax(axis=1), (res_x, res_y))
     xys = np.unravel_index(vs.reshape((n_samples, res_x * res_y)).argmax(axis=1), (res_x, res_y))
 
     # Transform into an array containing coordinates
@@ -159,11 +158,6 @@ def ssp_to_loc_v(sps, heatmap_vectors, xs, ys):
     assert(locs.shape[1] == 2)
 
     return locs
-
-    # x = xs[xy[0]]
-    # y = ys[xy[1]]
-    #
-    # return np.array([x, y])
 
 
 ####################
@@ -186,10 +180,13 @@ def generate_region_vector(desired, xs, ys, x_axis_sp, y_axis_sp, normalize=True
             if desired[i, j] == 1:
                 vector += encode_point(x, y, x_axis_sp, y_axis_sp).v
 
-    sp = nengo.spa.SemanticPointer(data=vector)
+    sp = spa.SemanticPointer(data=vector)
 
     if normalize:
-        sp.normalize()
+        try:
+            sp = sp.normalized()
+        except:
+            sp.normalize()
 
     return sp
 
@@ -277,6 +274,6 @@ def encode_random(x, y, dim=512, convert_to_sp=False):
     vec = rstate.normal(size=dim)
     vec = vec / np.linalg.norm(vec)
     if convert_to_sp:
-        return nengo.spa.SemanticPointer(data=vec)
+        return spa.SemanticPointer(data=vec)
     else:
         return vec
