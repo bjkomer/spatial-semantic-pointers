@@ -97,7 +97,7 @@ class SpatialHeatmap(object):
         self._nengo_html_ = image_svg(values)
 
 
-def plot_predictions(predictions, coords, ax, min_val=-1, max_val=1):
+def plot_predictions(predictions, coords, ax, min_val=-1, max_val=1, fixed_axes=False):
     """
     plot predictions, and colour them based on their true coords
     both predictions and coords are (n_samples, 2) vectors
@@ -118,10 +118,14 @@ def plot_predictions(predictions, coords, ax, min_val=-1, max_val=1):
         # ax.scatter(x, y, color=(r, g, 0))
         ax.scatter(x, y, color=(r, 0, b))
 
+    if fixed_axes:
+        ax.set_xlim([min_val, max_val])
+        ax.set_ylim([min_val, max_val])
+
     return ax
 
 
-def plot_predictions_v(predictions, coords, ax, min_val=-1, max_val=1):
+def plot_predictions_v(predictions, coords, ax, min_val=-1, max_val=1, fixed_axes=False):
     """
     vectorized version of 'plot_predictions'
     plot predictions, and colour them based on their true coords
@@ -138,6 +142,10 @@ def plot_predictions_v(predictions, coords, ax, min_val=-1, max_val=1):
     assert(colours.shape[0] == r.shape[0])
 
     ax.scatter(x=predictions[:, 0], y=predictions[:, 1], c=colours)
+
+    if fixed_axes:
+        ax.set_xlim([min_val, max_val])
+        ax.set_ylim([min_val, max_val])
 
     return ax
 
