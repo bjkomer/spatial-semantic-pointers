@@ -163,7 +163,7 @@ def generate_cleanup_dataset(
 def main():
     parser = argparse.ArgumentParser('Train a network to clean up a noisy spatial semantic pointer')
 
-    parser.add_argument('--dataset', type=str, default='')
+    parser.add_argument('--loss', type=str, default='cosine', choices=['cosine', 'mse'])
     parser.add_argument('--train-fraction', type=float, default=.5, help='proportion of the dataset to use for training')
     parser.add_argument('--n-samples', type=int, default=10000,
                         help='Number of memories to generate. Total samples will be n-samples * n-items')
@@ -289,7 +289,10 @@ def main():
             avg_mse_loss += mse_loss.data.item()
             n_batches += 1
 
-            cosine_loss.backward()
+            if args.loss == 'cosine':
+                cosine_loss.backward()
+            else:
+                mse_loss.backward()
 
             # print(loss.data.item())
 
