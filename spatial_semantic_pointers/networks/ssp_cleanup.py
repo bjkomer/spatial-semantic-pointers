@@ -201,6 +201,12 @@ def main():
         args.dim, args.seed, args.n_items, args.limits[1], args.n_samples
     )
 
+    final_test_samples = 100
+    final_test_items = 15
+    final_test_dataset_name = 'data/ssp_cleanup_test_dataset_dim{}_seed{}_items{}_limit{}_samples{}.npz'.format(
+        args.dim, args.seed, final_test_items, args.limits[1], final_test_samples
+    )
+
     if not os.path.exists('data'):
         os.makedirs('data')
 
@@ -249,6 +255,33 @@ def main():
                 y_axis_vec=x_axis_sp.v,
             )
 
+    # check if the final test set has been generated yet
+    if os.path.exists(final_test_dataset_name):
+        print("Loading final test dataset")
+        final_test_data = np.load(final_test_dataset_name)
+        final_test_clean_ssps = data['clean_ssps']
+        final_test_noisy_ssps = data['noisy_ssps']
+    else:
+        print("Generating final test dataset")
+        final_test_clean_ssps, final_test_noisy_ssps, final_test_coords = generate_cleanup_dataset(
+            x_axis_sp=x_axis_sp,
+            y_axis_sp=y_axis_sp,
+            n_samples=final_test_samples,
+            dim=args.dim,
+            n_items=final_test_items,
+            limits=args.limits,
+            seed=args.seed,
+        )
+        print("Final test generation complete. Saving dataset")
+        np.savez(
+            final_test_dataset_name,
+            clean_ssps=final_test_clean_ssps,
+            noisy_ssps=final_test_noisy_ssps,
+            coords=final_test_coords,
+            x_axis_vec=x_axis_sp.v,
+            y_axis_vec=x_axis_sp.v,
+        )
+
     # Add gaussian noise if required
     if args.noise_type == 'gaussian' or args.noise_type == 'both':
         noisy_ssps += np.random.normal(loc=0, scale=args.sigma, size=noisy_ssps.shape)
@@ -265,6 +298,7 @@ def main():
     # NOTE: this dataset is actually generic and can take any input/output mapping
     dataset_train = CoordDecodeDataset(vectors=train_noisy, coords=train_clean)
     dataset_test = CoordDecodeDataset(vectors=test_noisy, coords=test_clean)
+    dataset_final_test = CoordDecodeDataset(vectors=final_test_noisy_ssps, coords=final_test_clean_ssps)
 
     trainloader = torch.utils.data.DataLoader(
         dataset_train, batch_size=args.batch_size, shuffle=True, num_workers=0,
@@ -273,6 +307,10 @@ def main():
     # For testing just do everything in one giant batch
     testloader = torch.utils.data.DataLoader(
         dataset_test, batch_size=len(dataset_test), shuffle=False, num_workers=0,
+    )
+
+    final_testloader = torch.utils.data.DataLoader(
+        dataset_final_test, batch_size=len(dataset_final_test), shuffle=False, num_workers=0,
     )
 
     model = FeedForward(dim=dataset_train.dim, hidden_size=args.hidden_size, output_size=dataset_train.dim)
@@ -339,74 +377,76 @@ def main():
     print("Testing")
     with torch.no_grad():
 
-        # Everything is in one batch, so this loop will only happen once
-        for i, data in enumerate(testloader):
+        for label, loader in zip(['test', 'final_test'], [testloader, final_testloader]):
 
-            noisy, clean = data
+            # Everything is in one batch, so this loop will only happen once
+            for i, data in enumerate(loader):
 
-            outputs = model(noisy)
+                noisy, clean = data
 
-            mse_loss = mse_criterion(outputs, clean)
-            # Modified to use CosineEmbeddingLoss
-            cosine_loss = cosine_criterion(outputs, clean, torch.ones(len(dataset_test)))
+                outputs = model(noisy)
 
-            print(cosine_loss.data.item())
+                mse_loss = mse_criterion(outputs, clean)
+                # Modified to use CosineEmbeddingLoss
+                cosine_loss = cosine_criterion(outputs, clean, torch.ones(len(loader)))
 
-        if args.logdir != '':
-            # TODO: get a visualization of the performance
+                print(cosine_loss.data.item())
 
-            # show plots of the noisy, clean, and cleaned up with the network
-            # note that the plotting mechanism itself uses nearest neighbors, so has a form of cleanup built in
+            if args.logdir != '':
+                # TODO: get a visualization of the performance
 
-            xs = np.linspace(args.limits[0], args.limits[1], 256)
-            ys = np.linspace(args.limits[0], args.limits[1], 256)
+                # show plots of the noisy, clean, and cleaned up with the network
+                # note that the plotting mechanism itself uses nearest neighbors, so has a form of cleanup built in
 
-            heatmap_vectors = get_heatmap_vectors(xs, ys, x_axis_sp, y_axis_sp)
+                xs = np.linspace(args.limits[0], args.limits[1], 256)
+                ys = np.linspace(args.limits[0], args.limits[1], 256)
 
-            noisy_coord = ssp_to_loc_v(
-                noisy,
-                heatmap_vectors, xs, ys
-            )
+                heatmap_vectors = get_heatmap_vectors(xs, ys, x_axis_sp, y_axis_sp)
 
-            pred_coord = ssp_to_loc_v(
-                outputs,
-                heatmap_vectors, xs, ys
-            )
+                noisy_coord = ssp_to_loc_v(
+                    noisy,
+                    heatmap_vectors, xs, ys
+                )
 
-            clean_coord = ssp_to_loc_v(
-                clean,
-                heatmap_vectors, xs, ys
-            )
+                pred_coord = ssp_to_loc_v(
+                    outputs,
+                    heatmap_vectors, xs, ys
+                )
 
-            fig_noisy_coord, ax_noisy_coord = plt.subplots()
-            fig_pred_coord, ax_pred_coord = plt.subplots()
-            fig_clean_coord, ax_clean_coord = plt.subplots()
+                clean_coord = ssp_to_loc_v(
+                    clean,
+                    heatmap_vectors, xs, ys
+                )
 
-            plot_predictions_v(
-                noisy_coord,
-                clean_coord,
-                ax_noisy_coord, min_val=args.limits[0], max_val=args.limits[1], fixed_axes=True
-            )
+                fig_noisy_coord, ax_noisy_coord = plt.subplots()
+                fig_pred_coord, ax_pred_coord = plt.subplots()
+                fig_clean_coord, ax_clean_coord = plt.subplots()
 
-            plot_predictions_v(
-                pred_coord,
-                clean_coord,
-                ax_pred_coord, min_val=args.limits[0], max_val=args.limits[1], fixed_axes=True
-            )
+                plot_predictions_v(
+                    noisy_coord,
+                    clean_coord,
+                    ax_noisy_coord, min_val=args.limits[0], max_val=args.limits[1], fixed_axes=True
+                )
 
-            plot_predictions_v(
-                clean_coord,
-                clean_coord,
-                ax_clean_coord, min_val=args.limits[0], max_val=args.limits[1], fixed_axes=True
-            )
+                plot_predictions_v(
+                    pred_coord,
+                    clean_coord,
+                    ax_pred_coord, min_val=args.limits[0], max_val=args.limits[1], fixed_axes=True
+                )
 
-            writer.add_figure('original noise', fig_noisy_coord)
-            writer.add_figure('test set cleanup', fig_pred_coord)
-            writer.add_figure('ground truth', fig_clean_coord)
-            # fig_hist = plot_histogram(predictions=outputs, coords=coord)
-            # writer.add_figure('test set histogram', fig_hist)
-            writer.add_scalar('test_cosine_loss', cosine_loss.data.item())
-            writer.add_scalar('test_mse_loss', mse_loss.data.item())
+                plot_predictions_v(
+                    clean_coord,
+                    clean_coord,
+                    ax_clean_coord, min_val=args.limits[0], max_val=args.limits[1], fixed_axes=True
+                )
+
+                writer.add_figure('{}/original_noise'.format(label), fig_noisy_coord)
+                writer.add_figure('{}/test_set_cleanup'.format(label), fig_pred_coord)
+                writer.add_figure('{}/ground_truth'.format(label), fig_clean_coord)
+                # fig_hist = plot_histogram(predictions=outputs, coords=coord)
+                # writer.add_figure('test set histogram', fig_hist)
+                writer.add_scalar('{}/test_cosine_loss'.format(label), cosine_loss.data.item())
+                writer.add_scalar('{}/test_mse_loss'.format(label), mse_loss.data.item())
 
     # Close tensorboard writer
     if args.logdir != '':
