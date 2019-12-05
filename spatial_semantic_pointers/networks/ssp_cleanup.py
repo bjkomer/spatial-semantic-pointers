@@ -11,8 +11,11 @@ import json
 from datetime import datetime
 import os.path as osp
 import os
-import nengo
-from spatial_semantic_pointers.utils import encode_point, make_good_unitary
+# import nengo
+import nengo_spa as spa
+from spatial_semantic_pointers.utils import encode_point, make_good_unitary, get_heatmap_vectors, ssp_to_loc_v
+from spatial_semantic_pointers.plots import plot_predictions_v
+import matplotlib.pyplot as plt
 
 
 class SpatialCleanup(object):
@@ -121,7 +124,7 @@ def generate_cleanup_dataset(
     noisy_ssps = np.zeros((n_samples * n_items, dim))
 
     for i in range(n_samples):
-        memory_sp = nengo.spa.SemanticPointer(data=np.zeros((dim,)))
+        memory_sp = spa.SemanticPointer(data=np.zeros((dim,)))
 
         # If a set of items is given, choose a subset to use now
         if item_set is not None:
@@ -137,9 +140,10 @@ def generate_cleanup_dataset(
             pos = encode_point(x, y, x_axis_sp=x_axis_sp, y_axis_sp=y_axis_sp)
 
             if items_used is None:
-                item = nengo.spa.SemanticPointer(dim)
+                # item = spa.SemanticPointer(dim)
+                item = spa.SemanticPointer(data=np.random.randn(dim)).normalized()
             else:
-                item = nengo.spa.SemanticPointer(data=items_used[j])
+                item = spa.SemanticPointer(data=items_used[j])
 
             items[i, j, :] = item.v
             coords[i * n_items + j, 0] = x
@@ -148,13 +152,14 @@ def generate_cleanup_dataset(
             memory_sp += (pos * item)
 
         if normalize_memory:
-            memory_sp.normalize()
+            # memory_sp.normalize()
+            memory_sp = memory_sp.normalized()
 
         memory[i, :] = memory_sp.v
 
         # Query for each item to get the noisy SSPs
         for j in range(n_items):
-            noisy_ssps[i * n_items + j, :] = (memory_sp * ~nengo.spa.SemanticPointer(data=items[i, j, :])).v
+            noisy_ssps[i * n_items + j, :] = (memory_sp * ~spa.SemanticPointer(data=items[i, j, :])).v
 
     return clean_ssps, noisy_ssps, coords
     # return memory, items, coords, x_axis_sp, y_axis_sp
@@ -164,6 +169,8 @@ def main():
     parser = argparse.ArgumentParser('Train a network to clean up a noisy spatial semantic pointer')
 
     parser.add_argument('--loss', type=str, default='cosine', choices=['cosine', 'mse'])
+    parser.add_argument('--noise-type', type=str, default='memory', choices=['memory', 'gaussian', 'both'])
+    parser.add_argument('--sigma', type=float, default=1.0, help='sigma on the gaussian noise if noise-type==gaussian')
     parser.add_argument('--train-fraction', type=float, default=.5, help='proportion of the dataset to use for training')
     parser.add_argument('--n-samples', type=int, default=10000,
                         help='Number of memories to generate. Total samples will be n-samples * n-items')
@@ -201,31 +208,50 @@ def main():
     x_axis_sp = make_good_unitary(args.dim, rng=rng)
     y_axis_sp = make_good_unitary(args.dim, rng=rng)
 
-    if os.path.exists(dataset_name):
-        print("Loading dataset")
-        data = np.load(dataset_name)
-        clean_ssps = data['clean_ssps']
-        noisy_ssps = data['noisy_ssps']
+    if args.noise_type == 'gaussian':
+        # Simple generation
+        clean_ssps = np.zeros((args.n_samples, args.dim))
+        coords = np.zeros((args.n_samples, 2))
+        for i in range(args.n_samples):
+            x = np.random.uniform(low=args.limits[0], high=args.limits[1])
+            y = np.random.uniform(low=args.limits[2], high=args.limits[3])
+
+            clean_ssps[i, :] = encode_point(x, y, x_axis_sp=x_axis_sp, y_axis_sp=y_axis_sp).v
+            coords[i, 0] = x
+            coords[i, 1] = y
+        # Gaussian noise will be added later
+        noisy_ssps = clean_ssps.copy()
     else:
-        print("Generating SSP cleanup dataset")
-        clean_ssps, noisy_ssps, coords = generate_cleanup_dataset(
-            x_axis_sp=x_axis_sp,
-            y_axis_sp=y_axis_sp,
-            n_samples=args.n_samples,
-            dim=args.dim,
-            n_items=args.n_items,
-            limits=args.limits,
-            seed=args.seed,
-        )
-        print("Dataset generation complete. Saving dataset")
-        np.savez(
-            dataset_name,
-            clean_ssps=clean_ssps,
-            noisy_ssps=noisy_ssps,
-            coords=coords,
-            x_axis_vec=x_axis_sp.v,
-            y_axis_vec=x_axis_sp.v,
-        )
+
+        if os.path.exists(dataset_name):
+            print("Loading dataset")
+            data = np.load(dataset_name)
+            clean_ssps = data['clean_ssps']
+            noisy_ssps = data['noisy_ssps']
+        else:
+            print("Generating SSP cleanup dataset")
+            clean_ssps, noisy_ssps, coords = generate_cleanup_dataset(
+                x_axis_sp=x_axis_sp,
+                y_axis_sp=y_axis_sp,
+                n_samples=args.n_samples,
+                dim=args.dim,
+                n_items=args.n_items,
+                limits=args.limits,
+                seed=args.seed,
+            )
+            print("Dataset generation complete. Saving dataset")
+            np.savez(
+                dataset_name,
+                clean_ssps=clean_ssps,
+                noisy_ssps=noisy_ssps,
+                coords=coords,
+                x_axis_vec=x_axis_sp.v,
+                y_axis_vec=x_axis_sp.v,
+            )
+
+    # Add gaussian noise if required
+    if args.noise_type == 'gaussian' or args.noise_type == 'both':
+        noisy_ssps += np.random.normal(loc=0, scale=args.sigma, size=noisy_ssps.shape)
 
     n_samples = clean_ssps.shape[0]
     n_train = int(args.train_fraction * n_samples)
@@ -328,18 +354,55 @@ def main():
 
         if args.logdir != '':
             # TODO: get a visualization of the performance
-            # fig_pred = plot_predictions(
-            #     predictions=outputs, coords=coord,
-            #     min_val=min(args.limits[0], args.limits[2]),
-            #     max_val=max(args.limits[1], args.limits[3])
-            # )
-            # writer.add_figure('test set predictions', fig_pred)
-            # fig_truth = plot_predictions(
-            #     predictions=coord, coords=coord,
-            #     min_val=min(args.limits[0], args.limits[2]),
-            #     max_val=max(args.limits[1], args.limits[3])
-            # )
-            # writer.add_figure('ground truth', fig_truth)
+
+            # show plots of the noisy, clean, and cleaned up with the network
+            # note that the plotting mechanism itself uses nearest neighbors, so has a form of cleanup built in
+
+            xs = np.linspace(args.limits[0], args.limits[1], 256)
+            ys = np.linspace(args.limits[0], args.limits[1], 256)
+
+            heatmap_vectors = get_heatmap_vectors(xs, ys, x_axis_sp, y_axis_sp)
+
+            noisy_coord = ssp_to_loc_v(
+                noisy,
+                heatmap_vectors, xs, ys
+            )
+
+            pred_coord = ssp_to_loc_v(
+                outputs,
+                heatmap_vectors, xs, ys
+            )
+
+            clean_coord = ssp_to_loc_v(
+                clean,
+                heatmap_vectors, xs, ys
+            )
+
+            fig_noisy_coord, ax_noisy_coord = plt.subplots()
+            fig_pred_coord, ax_pred_coord = plt.subplots()
+            fig_clean_coord, ax_clean_coord = plt.subplots()
+
+            plot_predictions_v(
+                noisy_coord,
+                clean_coord,
+                ax_noisy_coord, min_val=args.limits[0], max_val=args.limits[1], fixed_axes=True
+            )
+
+            plot_predictions_v(
+                pred_coord,
+                clean_coord,
+                ax_pred_coord, min_val=args.limits[0], max_val=args.limits[1], fixed_axes=True
+            )
+
+            plot_predictions_v(
+                clean_coord,
+                clean_coord,
+                ax_clean_coord, min_val=args.limits[0], max_val=args.limits[1], fixed_axes=True
+            )
+
+            writer.add_figure('original noise', fig_noisy_coord)
+            writer.add_figure('test set cleanup', fig_pred_coord)
+            writer.add_figure('ground truth', fig_clean_coord)
             # fig_hist = plot_histogram(predictions=outputs, coords=coord)
             # writer.add_figure('test set histogram', fig_hist)
             writer.add_scalar('test_cosine_loss', cosine_loss.data.item())
