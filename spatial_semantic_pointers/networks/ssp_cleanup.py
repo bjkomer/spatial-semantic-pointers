@@ -197,8 +197,8 @@ def main():
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    dataset_name = 'data/ssp_cleanup_dataset_dim{}_seed{}_items{}_samples{}.npz'.format(
-        args.dim, args.seed, args.n_items, args.n_samples
+    dataset_name = 'data/ssp_cleanup_dataset_dim{}_seed{}_items{}_limit{}_samples{}.npz'.format(
+        args.dim, args.seed, args.n_items, args.limits[1], args.n_samples
     )
 
     if not os.path.exists('data'):
