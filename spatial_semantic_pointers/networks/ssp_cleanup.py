@@ -259,8 +259,8 @@ def main():
     if os.path.exists(final_test_dataset_name):
         print("Loading final test dataset")
         final_test_data = np.load(final_test_dataset_name)
-        final_test_clean_ssps = data['clean_ssps']
-        final_test_noisy_ssps = data['noisy_ssps']
+        final_test_clean_ssps = final_test_data['clean_ssps']
+        final_test_noisy_ssps = final_test_data['noisy_ssps']
     else:
         print("Generating final test dataset")
         final_test_clean_ssps, final_test_noisy_ssps, final_test_coords = generate_cleanup_dataset(
