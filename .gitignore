@@ -1,0 +1,10 @@
+*.swp
+*.pyc
+*.npz
+*.old
+*.egg-info
+.idea
+__pycache__
+
+# output files
+spatial_semantic_pointers/networks/ssp_cleanup
