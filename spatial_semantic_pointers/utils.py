@@ -278,11 +278,55 @@ def encode_random(x, y, dim=512, convert_to_sp=False):
     else:
         return vec
 
+#################
+# Periodic Axes #
+#################
+
+
+# modified from 'make_good_unitary' from arvoelke
+def make_fixed_dim_periodic_axis(dim=128, spacing=4, phase=0, frequency=1,
+                                 eps=1e-3, rng=np.random, flip=False,
+                                 random_phases=False,
+                                 ):
+    # will repeat at a distance of 2*spacing
+    # dimensionality is fixed
+
+    phi_list = np.linspace(0, np.pi, spacing + 1)[1:-1]
+
+    if random_phases:
+        phase = rng.uniform(-np.pi, np.pi, size=(dim - 1) // 2)
+
+    phi = rng.choice(phi_list, replace=True, size=(dim - 1) // 2)
+
+    assert np.all(np.abs(phi) >= np.pi * eps)
+    assert np.all(np.abs(phi) <= np.pi * (1 - eps))
+
+    fv = np.zeros(dim, dtype='complex64')
+    fv[0] = 1
+    if flip:
+        fv[1:(dim + 1) // 2] = np.sin(phi * frequency + phase) + 1j * np.cos(phi * frequency + phase)
+    else:
+        fv[1:(dim + 1) // 2] = np.cos(phi * frequency + phase) + 1j * np.sin(phi * frequency + phase)
+    fv[-1:dim // 2:-1] = np.conj(fv[1:(dim + 1) // 2])
+    if dim % 2 == 0:
+        fv[dim // 2] = 1  #hmmm... does this have any implications?
+
+    assert np.allclose(np.abs(fv), 1)
+    v = np.fft.ifft(fv)
+    # assert np.allclose(v.imag, 0, atol=1e-5)
+    v = v.real
+    assert np.allclose(np.fft.fft(v), fv)
+    assert np.allclose(np.linalg.norm(v), 1)
+    return v
+    # return spa.SemanticPointer(v)
+
+
 ##################################
 # Hexagonal Coordinate Functions #
 ##################################
 
-def rotate_vector(vec, rot_axis, theta):
+
+def rotate_vector_along_axis(vec, rot_axis, theta):
     axis = rot_axis.copy()
     axis = axis/np.sqrt(np.dot(axis, axis))
     a = np.cos(theta/2.0)
@@ -304,8 +348,8 @@ normal = normal / np.linalg.norm(normal)
 default_x_axis = default_x_axis / np.linalg.norm(default_x_axis)
 default_y_axis = default_y_axis / np.linalg.norm(default_y_axis)
 
-default_x_axis = rotate_vector(default_x_axis, normal, grid_angle * np.pi / 180)
-default_y_axis = rotate_vector(default_y_axis, normal, grid_angle * np.pi / 180)
+default_x_axis = rotate_vector_along_axis(default_x_axis, normal, grid_angle * np.pi / 180)
+default_y_axis = rotate_vector_along_axis(default_y_axis, normal, grid_angle * np.pi / 180)
 
 # Used in the vectorized functions
 default_xy_axes = np.vstack([default_x_axis, default_y_axis]).T
@@ -385,3 +429,76 @@ def get_heatmap_vectors_hex(xs, ys, x_axis_sp, y_axis_sp, z_axis_sp):
             vectors[i, j, :] = p.v
 
     return vectors
+
+#################################################
+# N-dimensional projection coordinate functions #
+#################################################
+
+
+def encode_point_n(x, y, axis_sps):
+    """
+    Encodes a given 2D point as a ND SSP
+    """
+
+    n = len(axis_sps)
+
+    x_axis = np.ones((n,))
+    y_axis = np.ones((n,))
+
+    # There are many ways to create orthogonal vectors, this is just one of them
+    if n % 2 == 0:
+        # every other element negative, with the last two elements as 0
+        x_axis[1::2] = -1
+        x_axis[-2:] = 0
+        # all but the last two elements -1, last element equal to n-2
+        y_axis[:-2] = -1
+        y_axis[-2] = 0
+        y_axis[-1] = n - 2
+    else:
+        # every other element negative, with the last element as 0
+        x_axis[1::2] = -1
+        x_axis[-1] = 0
+        # all but the last element -1, last element equal to n-1
+        y_axis[:-1] = -1
+        y_axis[-1] = n - 1
+
+    # doublecheck that everything worked as expected
+    assert (np.dot(x_axis, y_axis) == 0)
+    assert (np.dot(x_axis, np.ones((n,))) == 0)
+    assert (np.dot(y_axis, np.ones((n,))) == 0)
+
+    x_axis = x_axis / np.linalg.norm(x_axis)
+    y_axis = y_axis / np.linalg.norm(y_axis)
+
+    # 2D point represented as an N dimensional vector in the plane spanned by 'x_axis' and 'y_axis'
+    vec = x_axis * x + y_axis * y
+
+    # Generate the SSP from the high dimensional vector, by convolving all of the axis vector components together
+    ret = power(axis_sps[0], vec[0])
+    for i in range(1, n):
+        ret *= power(axis_sps[i], vec[i])
+
+    return ret
+
+
+def get_heatmap_vectors_n(xs, ys, n, seed=13, dim=512):
+    """
+    Precompute spatial semantic pointers for every location in the linspace
+    Used to quickly compute heat maps by a simple vectorized dot product (matrix multiplication)
+    """
+    rng = np.random.RandomState(seed=seed)
+    axis_sps = []
+    for i in range(n):
+        axis_sps.append(make_good_unitary(dim, rng=rng))
+
+    vectors = np.zeros((len(xs), len(ys), dim))
+
+    for i, x in enumerate(xs):
+        for j, y in enumerate(ys):
+            p = encode_point_n(
+                x=x, y=y, axis_sps=axis_sps
+            )
+            vectors[i, j, :] = p.v
+
+    # also return the axis_sps so individual points can be generated
+    return vectors, axis_sps
