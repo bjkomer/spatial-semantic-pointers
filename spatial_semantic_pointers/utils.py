@@ -435,47 +435,79 @@ def get_heatmap_vectors_hex(xs, ys, x_axis_sp, y_axis_sp, z_axis_sp):
 #################################################
 
 
+# def encode_point_n(x, y, axis_sps):
+#     """
+#     Encodes a given 2D point as a ND SSP
+#     """
+#
+#     n = len(axis_sps)
+#
+#     x_axis = np.ones((n,))
+#     y_axis = np.ones((n,))
+#
+#     # There are many ways to create orthogonal vectors, this is just one of them
+#     if n % 2 == 0:
+#         # every other element negative, with the last two elements as 0
+#         x_axis[1::2] = -1
+#         x_axis[-2:] = 0
+#         # all but the last two elements -1, last element equal to n-2
+#         y_axis[:-2] = -1
+#         y_axis[-2] = 0
+#         y_axis[-1] = n - 2
+#     else:
+#         # every other element negative, with the last element as 0
+#         x_axis[1::2] = -1
+#         x_axis[-1] = 0
+#         # all but the last element -1, last element equal to n-1
+#         y_axis[:-1] = -1
+#         y_axis[-1] = n - 1
+#
+#     # doublecheck that everything worked as expected
+#     assert (np.dot(x_axis, y_axis) == 0)
+#     assert (np.dot(x_axis, np.ones((n,))) == 0)
+#     assert (np.dot(y_axis, np.ones((n,))) == 0)
+#
+#     x_axis = x_axis / np.linalg.norm(x_axis)
+#     y_axis = y_axis / np.linalg.norm(y_axis)
+#
+#     # 2D point represented as an N dimensional vector in the plane spanned by 'x_axis' and 'y_axis'
+#     vec = x_axis * x + y_axis * y
+#
+#     # Generate the SSP from the high dimensional vector, by convolving all of the axis vector components together
+#     ret = power(axis_sps[0], vec[0])
+#     for i in range(1, n):
+#         ret *= power(axis_sps[i], vec[i])
+#
+#     return ret
+
 def encode_point_n(x, y, axis_sps):
     """
     Encodes a given 2D point as a ND SSP
     """
 
-    n = len(axis_sps)
+    N = len(axis_sps)
 
-    x_axis = np.ones((n,))
-    y_axis = np.ones((n,))
+    points_nd = np.zeros((N + 1, N))
+    points_nd[:N, :] = np.eye(N)
+    # points in 2D that will correspond to each axis, plus one at zero
+    points_2d = np.zeros((N + 1, 2))
+    thetas = np.linspace(0, 2 * np.pi, N + 1)[:-1]
+    # TODO: will want a scaling here, or along the high dim axes
+    for i, theta in enumerate(thetas):
+        points_2d[i, 0] = np.cos(theta)
+        points_2d[i, 1] = np.sin(theta)
 
-    # There are many ways to create orthogonal vectors, this is just one of them
-    if n % 2 == 0:
-        # every other element negative, with the last two elements as 0
-        x_axis[1::2] = -1
-        x_axis[-2:] = 0
-        # all but the last two elements -1, last element equal to n-2
-        y_axis[:-2] = -1
-        y_axis[-2] = 0
-        y_axis[-1] = n - 2
-    else:
-        # every other element negative, with the last element as 0
-        x_axis[1::2] = -1
-        x_axis[-1] = 0
-        # all but the last element -1, last element equal to n-1
-        y_axis[:-1] = -1
-        y_axis[-1] = n - 1
+    transform_mat = np.linalg.lstsq(points_2d, points_nd)
 
-    # doublecheck that everything worked as expected
-    assert (np.dot(x_axis, y_axis) == 0)
-    assert (np.dot(x_axis, np.ones((n,))) == 0)
-    assert (np.dot(y_axis, np.ones((n,))) == 0)
-
-    x_axis = x_axis / np.linalg.norm(x_axis)
-    y_axis = y_axis / np.linalg.norm(y_axis)
+    x_axis = transform_mat[0][0, :]
+    y_axis = transform_mat[0][1, :]
 
     # 2D point represented as an N dimensional vector in the plane spanned by 'x_axis' and 'y_axis'
     vec = x_axis * x + y_axis * y
 
     # Generate the SSP from the high dimensional vector, by convolving all of the axis vector components together
     ret = power(axis_sps[0], vec[0])
-    for i in range(1, n):
+    for i in range(1, N):
         ret *= power(axis_sps[i], vec[i])
 
     return ret
@@ -502,3 +534,54 @@ def get_heatmap_vectors_n(xs, ys, n, seed=13, dim=512):
 
     # also return the axis_sps so individual points can be generated
     return vectors, axis_sps
+
+
+def get_axes(dim=256, n=3, seed=13, spacing=0):
+    """
+    Get X and Y axis vectors based on an n dimensional projection.
+    If spacing is non-zero, they will be periodic with the given spacing
+    :param dim:
+    :param n:
+    :param seed:
+    :param spacing:
+    :return:
+    """
+    rng = np.random.RandomState(seed=seed)
+
+    # # Length of the normal vector to the plane
+    # len_normal = np.linalg.norm(np.ones((n,)) * 1./n)
+    # # pythagorean theorem to find the length along the axis, assuming in the 2D space the length to the point is one
+    # len_axis = np.sqrt(len_normal**2 + 1)
+
+    points_nd = np.eye(n) #* np.sqrt(n)
+    # points in 2D that will correspond to each axis, plus one at zero
+    points_2d = np.zeros((n, 2))
+    thetas = np.linspace(0, 2 * np.pi, n + 1)[:-1]
+    # TODO: will want a scaling here, or along the high dim axes
+    for i, theta in enumerate(thetas):
+        points_2d[i, 0] = np.cos(theta)
+        points_2d[i, 1] = np.sin(theta)
+
+    transform_mat = np.linalg.lstsq(points_2d, points_nd)
+
+    x_axis = transform_mat[0][0, :]
+    y_axis = transform_mat[0][1, :]
+
+    axis_sps = []
+    for i in range(n):
+        if spacing == 0:
+            axis_sps.append(
+                make_good_unitary(dim, rng=rng)
+            )
+        else:
+            axis_sps.append(
+                spa.SemanticPointer(data=make_fixed_dim_periodic_axis(dim=dim, spacing=spacing, rng=rng))
+            )
+
+    X = power(axis_sps[0], x_axis[0])
+    Y = power(axis_sps[0], y_axis[0])
+    for i in range(1, n):
+        X *= power(axis_sps[i], x_axis[i])
+        Y *= power(axis_sps[i], y_axis[i])
+
+    return X, Y
