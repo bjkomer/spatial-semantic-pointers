@@ -284,14 +284,23 @@ def encode_random(x, y, dim=512, convert_to_sp=False):
 
 
 # modified from 'make_good_unitary' from arvoelke
-def make_fixed_dim_periodic_axis(dim=128, spacing=4, phase=0, frequency=1,
+def make_fixed_dim_periodic_axis(dim=128, period=4, phase=0, frequency=1,
                                  eps=1e-3, rng=np.random, flip=False,
                                  random_phases=False,
                                  ):
     # will repeat at a distance of 2*spacing
     # dimensionality is fixed
 
-    phi_list = np.linspace(0, np.pi, spacing + 1)[1:-1]
+    # phi_list = np.linspace(0, np.pi, spacing + 1)[1:-1]
+
+    val = 2 * np.pi / period
+    phi_list = [val, -val]
+
+    i = 2
+    while i * val < np.pi:
+        phi_list.append(i * val)
+        phi_list.append(-i * val)
+        i += 1
 
     if random_phases:
         phase = rng.uniform(-np.pi, np.pi, size=(dim - 1) // 2)
@@ -536,7 +545,7 @@ def get_heatmap_vectors_n(xs, ys, n, seed=13, dim=512):
     return vectors, axis_sps
 
 
-def get_axes(dim=256, n=3, seed=13, spacing=0):
+def get_axes(dim=256, n=3, seed=13, period=0):
     """
     Get X and Y axis vectors based on an n dimensional projection.
     If spacing is non-zero, they will be periodic with the given spacing
@@ -569,13 +578,13 @@ def get_axes(dim=256, n=3, seed=13, spacing=0):
 
     axis_sps = []
     for i in range(n):
-        if spacing == 0:
+        if period == 0:
             axis_sps.append(
                 make_good_unitary(dim, rng=rng)
             )
         else:
             axis_sps.append(
-                spa.SemanticPointer(data=make_fixed_dim_periodic_axis(dim=dim, spacing=spacing, rng=rng))
+                spa.SemanticPointer(data=make_fixed_dim_periodic_axis(dim=dim, period=period, rng=rng))
             )
 
     X = power(axis_sps[0], x_axis[0])
