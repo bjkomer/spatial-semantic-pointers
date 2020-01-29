@@ -330,6 +330,32 @@ def make_fixed_dim_periodic_axis(dim=128, period=4, phase=0, frequency=1,
     # return spa.SemanticPointer(v)
 
 
+def make_optimal_periodic_axis(dim=128, eps=1e-3, phase=0, rng=np.random):
+    spacing = dim // 2
+
+    phi = np.linspace(0, np.pi, spacing + 1)[1:-1]
+
+    # Randomize the order of the phi, so that different vectors can be created
+    rng.shuffle(phi)
+
+    assert np.all(np.abs(phi) >= np.pi * eps)
+    assert np.all(np.abs(phi) <= np.pi * (1 - eps))
+
+    fv = np.zeros(dim, dtype='complex64')
+    fv[0] = 1
+    fv[1:(dim + 1) // 2] = np.cos(phi + phase) + 1j * np.sin(phi + phase)
+    fv[-1:dim // 2:-1] = np.conj(fv[1:(dim + 1) // 2])
+    if dim % 2 == 0:
+        fv[dim // 2] = 1
+
+    assert np.allclose(np.abs(fv), 1)
+    v = np.fft.ifft(fv)
+    v = v.real
+    assert np.allclose(np.fft.fft(v), fv)
+    assert np.allclose(np.linalg.norm(v), 1)
+    return spa.SemanticPointer(v)
+
+
 ##################################
 # Hexagonal Coordinate Functions #
 ##################################
@@ -545,7 +571,7 @@ def get_heatmap_vectors_n(xs, ys, n, seed=13, dim=512):
     return vectors, axis_sps
 
 
-def get_axes(dim=256, n=3, seed=13, period=0):
+def get_axes(dim=256, n=3, seed=13, period=0, optimal_phi=False):
     """
     Get X and Y axis vectors based on an n dimensional projection.
     If spacing is non-zero, they will be periodic with the given spacing
@@ -579,10 +605,19 @@ def get_axes(dim=256, n=3, seed=13, period=0):
     axis_sps = []
     for i in range(n):
         if period == 0:
-            axis_sps.append(
-                make_good_unitary(dim, rng=rng)
-            )
+            if optimal_phi:
+                # unitary vector with unique phi for every element
+                # periodicity depends on the dimensionality
+                axis_sps.append(
+                    make_optimal_periodic_axis(dim, rng=rng)
+                )
+            else:
+                # random unitary vector
+                axis_sps.append(
+                    make_good_unitary(dim, rng=rng)
+                )
         else:
+            # unitary vector of fixed dimensionality and fixed periodicity
             axis_sps.append(
                 spa.SemanticPointer(data=make_fixed_dim_periodic_axis(dim=dim, period=period, rng=rng))
             )
