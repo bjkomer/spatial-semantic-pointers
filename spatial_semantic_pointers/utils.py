@@ -2,6 +2,7 @@ import numpy as np
 import nengo
 import nengo_spa as spa
 import struct
+from functools import reduce
 
 
 def power(s, e):
@@ -629,3 +630,82 @@ def get_axes(dim=256, n=3, seed=13, period=0, optimal_phi=False):
         Y *= power(axis_sps[i], y_axis[i])
 
     return X, Y
+
+
+def get_all_factors(n):
+    return set(reduce(list.__add__,
+                ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0)))
+
+
+def get_fixed_dim_grid_axes(dim=256, seed=13, scale_min=1, scale_max=2):
+    rng = np.random.RandomState(seed=seed)
+
+    if dim % 2 == 0:
+        wdim = dim - 2
+    else:
+        wdim = dim - 1
+
+    assert wdim % 6 == 0
+
+    # # attempt to define rotations and scales as evenly as possible
+    # # erring on the side of more scales than rotations
+    #
+    # factors = np.array(get_all_factors(wdim // 6))
+    #
+    # # an ideal factor will be close to the square root of the number
+    # ideal = int(np.sqrt(wdim // 6))
+    #
+    # # find the index of this closest factor
+    # ind = np.argmin(np.abs(factors - ideal))
+    #
+    # # construct a list with this factor and 'conjugate'
+    # div = [factors[ind], int((wdim // 6) / factors[ind])]
+    #
+    # # the number of scales will be the bigger one
+    # n_scales = max(div)
+    #
+    # # the number of rotations per scale will be the smaller one
+    # n_rotations = min(div)
+
+    # using the maximum possible number of scales
+    n_scales = wdim // 6
+    n_rotations = 1
+
+    scales = rng.uniform(scale_min, scale_max, (n_scales,))
+
+    # 3 directions 120 degrees apart
+    vec_dirs = [0, 2 * np.pi / 3, 4 * np.pi / 3]
+
+    # random rotations of the triplets of vectors that sum to 0
+    rotations = rng.uniform(-np.pi, np.pi, (n_scales, n_rotations))
+
+    fxy = np.zeros((2, dim), dtype='complex64')
+
+    # first element must be 1 or -1
+    fxy[:, 0] = 1
+
+    # if even dim, middle element must be 1 or -1
+    if dim % 2 == 0:
+        fxy[:, dim // 2] = 1
+
+    for i in range(2):
+        for s in range(n_scales):
+            for r in range(n_rotations):
+                kvecs = np.array([
+                    [np.sin(vec_dirs[0] + rotations[s, r]), np.cos(vec_dirs[0] + rotations[s, r])],
+                    [np.sin(vec_dirs[1] + rotations[s, r]), np.cos(vec_dirs[1] + rotations[s, r])],
+                    [np.sin(vec_dirs[2] + rotations[s, r]), np.cos(vec_dirs[2] + rotations[s, r])],
+                ])
+                for k in range(len(kvecs)):
+                    fxy[i, 1 + s * n_rotations * 3 + r * 3 + k] = np.exp(1.j * (scales[s] * kvecs[k, i]))
+
+        # set all of the complex conjugates
+        fxy[i, -1:dim // 2:-1] = np.conj(fxy[i, 1:(dim + 1) // 2])
+
+    assert np.allclose(np.abs(fxy[0, :]), 1)
+    assert np.allclose(np.abs(fxy[1, :]), 1)
+
+    x = np.fft.ifft(fxy[0, :]).real
+    y = np.fft.ifft(fxy[1, :]).real
+
+    return spa.SemanticPointer(x), spa.SemanticPointer(y)
