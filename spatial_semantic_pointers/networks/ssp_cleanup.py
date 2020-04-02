@@ -190,6 +190,7 @@ def main():
                         help='Name of output folder within logdir. Will use current date and time if blank')
     parser.add_argument('--weight-histogram', action='store_true', help='Save histograms of the weights if set')
     parser.add_argument('--use-hex-ssp', action='store_true')
+    parser.add_argument('--optimizer', type=str, default='adam', choices=['sgd', 'adam', 'rmsprop'])
 
     args = parser.parse_args()
 
@@ -331,7 +332,15 @@ def main():
 
     mse_criterion = nn.MSELoss()
     cosine_criterion = nn.CosineEmbeddingLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
+
+    if args.optimizer == 'sgd':
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
+    elif args.optimizer == 'rmsprop':
+        optimizer = torch.optim.RMSprop(model.parameters(), lr=args.lr, momentum=args.momentum)
+    elif args.optimizer == 'adam':
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    else:
+        raise NotImplementedError
 
     for e in range(args.epochs):
         print('Epoch: {0}'.format(e + 1))
