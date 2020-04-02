@@ -171,7 +171,7 @@ def main():
     parser.add_argument('--loss', type=str, default='cosine', choices=['cosine', 'mse'])
     parser.add_argument('--noise-type', type=str, default='memory', choices=['memory', 'gaussian', 'both'])
     parser.add_argument('--sigma', type=float, default=1.0, help='sigma on the gaussian noise if noise-type==gaussian')
-    parser.add_argument('--train-fraction', type=float, default=.5, help='proportion of the dataset to use for training')
+    parser.add_argument('--train-fraction', type=float, default=.8, help='proportion of the dataset to use for training')
     parser.add_argument('--n-samples', type=int, default=10000,
                         help='Number of memories to generate. Total samples will be n-samples * n-items')
     parser.add_argument('--n-items', type=int, default=12, help='number of items in memory. Proxy for noisiness')
