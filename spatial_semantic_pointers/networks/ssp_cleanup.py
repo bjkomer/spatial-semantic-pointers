@@ -13,7 +13,7 @@ import os.path as osp
 import os
 # import nengo
 import nengo_spa as spa
-from spatial_semantic_pointers.utils import encode_point, make_good_unitary, get_heatmap_vectors, ssp_to_loc_v
+from spatial_semantic_pointers.utils import encode_point, make_good_unitary, get_heatmap_vectors, ssp_to_loc_v, get_axes
 from spatial_semantic_pointers.plots import plot_predictions_v
 import matplotlib.pyplot as plt
 
@@ -189,6 +189,7 @@ def main():
     parser.add_argument('--name', type=str, default='',
                         help='Name of output folder within logdir. Will use current date and time if blank')
     parser.add_argument('--weight-histogram', action='store_true', help='Save histograms of the weights if set')
+    parser.add_argument('--use-hex-ssp', action='store_true')
 
     args = parser.parse_args()
 
@@ -211,8 +212,11 @@ def main():
         os.makedirs('data')
 
     rng = np.random.RandomState(seed=args.seed)
-    x_axis_sp = make_good_unitary(args.dim, rng=rng)
-    y_axis_sp = make_good_unitary(args.dim, rng=rng)
+    if args.use_hex_ssp:
+        x_axis_sp, y_axis_sp = get_axes(dim=args.dim, n=3, seed=args.seed)
+    else:
+        x_axis_sp = make_good_unitary(args.dim, rng=rng)
+        y_axis_sp = make_good_unitary(args.dim, rng=rng)
 
     if args.noise_type == 'gaussian':
         # Simple generation
