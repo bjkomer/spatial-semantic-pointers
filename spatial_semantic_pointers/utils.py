@@ -298,7 +298,7 @@ def make_fixed_dim_periodic_axis(dim=128, period=4, phase=0, frequency=1,
     phi_list = [val, -val]
 
     i = 2
-    while i * val < np.pi:
+    while i * val <= np.pi:
         phi_list.append(i * val)
         phi_list.append(-i * val)
         i += 1
@@ -308,8 +308,8 @@ def make_fixed_dim_periodic_axis(dim=128, period=4, phase=0, frequency=1,
 
     phi = rng.choice(phi_list, replace=True, size=(dim - 1) // 2)
 
-    assert np.all(np.abs(phi) >= np.pi * eps)
-    assert np.all(np.abs(phi) <= np.pi * (1 - eps))
+    # assert np.all(np.abs(phi) >= np.pi * eps)
+    # assert np.all(np.abs(phi) <= np.pi * (1 - eps))
 
     fv = np.zeros(dim, dtype='complex64')
     fv[0] = 1
@@ -535,11 +535,13 @@ def encode_point_n(x, y, axis_sps):
 
     transform_mat = np.linalg.lstsq(points_2d, points_nd)
 
-    x_axis = transform_mat[0][0, :]
-    y_axis = transform_mat[0][1, :]
+    # apply scaling to the axes based on the singular values. Both should be the same
+    x_axis = transform_mat[0][0, :] / transform_mat[3][0]
+    y_axis = transform_mat[0][1, :] / transform_mat[3][1]
 
     # 2D point represented as an N dimensional vector in the plane spanned by 'x_axis' and 'y_axis'
-    vec = x_axis * x + y_axis * y
+    # apply appropriate scaling based on the singular value
+    vec = (x_axis * x + y_axis * y) * transform_mat[3][0]
 
     # Generate the SSP from the high dimensional vector, by convolving all of the axis vector components together
     ret = power(axis_sps[0], vec[0])
@@ -707,5 +709,108 @@ def get_fixed_dim_grid_axes(dim=256, seed=13, scale_min=1, scale_max=2):
 
     x = np.fft.ifft(fxy[0, :]).real
     y = np.fft.ifft(fxy[1, :]).real
+
+    return spa.SemanticPointer(x), spa.SemanticPointer(y)
+
+
+def get_proj_phi(n_proj, phi, angle):
+    # get the phis corresponding to an orthogonal N-D axis projection onto a 2-D space
+    # TODO: this function can be made much more efficient
+
+    # minimal dimensionality required for this representation
+    dim = n_proj * 2 + 1
+
+    # make an axis for each n_proj
+    axes_f = np.zeros((n_proj, dim), dtype='complex64')
+    axes = np.zeros((n_proj, dim,))
+    axis_sps = []
+    for k in range(n_proj):
+        axes_f[k, :] = 1
+        axes_f[k, k + 1] = np.exp(1.j * phi)
+        axes_f[k, -(k + 1)] = np.conj(axes_f[k, k + 1])
+        axes[k, :] = np.fft.ifft(axes_f[k, :]).real
+
+        assert np.allclose(np.abs(axes_f[k, :]), 1)
+        assert np.allclose(np.fft.fft(axes[k, :]), axes_f[k, :])
+        assert np.allclose(np.linalg.norm(axes[k, :]), 1)
+
+        axis_sps.append(spa.SemanticPointer(data=axes[k, :]))
+
+    points_nd = np.zeros((n_proj + 1, n_proj))
+    points_nd[:n_proj, :] = np.eye(n_proj) * np.sqrt(n_proj)
+    # points in 2D that will correspond to each axis, plus one at zero
+    # the zero isn't really necessary, but doesn't hurt
+    points_2d = np.zeros((n_proj + 1, 2))
+    if n_proj != 2:
+        thetas = np.linspace(0, 2 * np.pi, n_proj + 1)[:-1] + angle
+    else:  # special case for 2D, don't want polar opposite axes
+        thetas = np.linspace(0, np.pi, n_proj + 1)[:-1] + angle
+
+    for i, theta in enumerate(thetas):
+        points_2d[i, 0] = np.cos(theta)
+        points_2d[i, 1] = np.sin(theta)
+
+    transform_mat = np.linalg.lstsq(points_2d, points_nd)
+
+    # apply scaling to the axes based on the singular values. Both should be the same
+    # note: this scaling seems only relevant to matching the effective random scaling, and needed on both sides anyway
+    x_axis = transform_mat[0][0, :] #/ transform_mat[3][0]
+    y_axis = transform_mat[0][1, :] #/ transform_mat[3][1]
+
+    X = power(axis_sps[0], x_axis[0])
+    Y = power(axis_sps[0], y_axis[0])
+    for i in range(1, n_proj):
+        X *= power(axis_sps[i], x_axis[i])
+        Y *= power(axis_sps[i], y_axis[i])
+
+    xf = np.fft.fft(X.v)
+    yf = np.fft.fft(Y.v)
+
+    return xf[1:1+n_proj], yf[1:1+n_proj]
+
+
+def get_fixed_dim_sub_toriod_axes(
+        dim=256,
+        n_proj=3,
+        scale_ratio=(1 + 5 ** 0.5) / 2,
+        scale_start_index=0,
+        rng=np.random, eps=0.001
+):
+
+    # number of toroids possible given the projection dimension
+    # if this does not evenly divide dim, extra dimensions will be set to zero (1 in frequency domain)
+    n_toroids = ((dim-1)//2)//n_proj
+
+    # Randomly select the angle for each toroid
+    angles = rng.uniform(0, 2*np.pi, size=(n_toroids,))
+
+    # create scales starting from the largest scale and moving down based on the ratio given
+    # with a start index of 0, the first scale will always be 2pi (minus epsilon to make the direction non-ambiguous)
+    # this is effectively the finest resolution that can be detected (though the scale into this rep is arbitrary)
+    scales = np.array([(np.pi - eps)/(scale_ratio**i) for i in range(scale_start_index, n_toroids+scale_start_index)])
+
+    xf = np.ones((dim,), dtype='complex64')
+    yf = np.ones((dim,), dtype='complex64')
+
+    for n in range(n_toroids):
+        phis_x, phis_y = get_proj_phi(n_proj=n_proj, phi=scales[n], angle=angles[n])
+        xf[1 + n * n_proj:1 + (n + 1) * n_proj] = phis_x
+        yf[1 + n * n_proj:1 + (n + 1) * n_proj] = phis_y
+
+    # set the appropriate conjugates
+    xf[-1:dim // 2:-1] = np.conj(xf[1:(dim + 1) // 2])
+    yf[-1:dim // 2:-1] = np.conj(yf[1:(dim + 1) // 2])
+    if dim % 2 == 0:
+        xf[dim // 2] = 1
+        yf[dim // 2] = 1
+
+    assert np.allclose(np.abs(xf), 1)
+    assert np.allclose(np.abs(yf), 1)
+    x = np.fft.ifft(xf).real
+    y = np.fft.ifft(yf).real
+    assert np.allclose(np.fft.fft(x), xf)
+    assert np.allclose(np.fft.fft(y), yf)
+    assert np.allclose(np.linalg.norm(x), 1)
+    assert np.allclose(np.linalg.norm(y), 1)
 
     return spa.SemanticPointer(x), spa.SemanticPointer(y)
