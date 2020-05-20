@@ -774,7 +774,8 @@ def get_fixed_dim_sub_toriod_axes(
         n_proj=3,
         scale_ratio=(1 + 5 ** 0.5) / 2,
         scale_start_index=0,
-        rng=np.random, eps=0.001
+        rng=np.random,
+        eps=0.001,
 ):
 
     # number of toroids possible given the projection dimension
@@ -784,15 +785,77 @@ def get_fixed_dim_sub_toriod_axes(
     # Randomly select the angle for each toroid
     angles = rng.uniform(0, 2*np.pi, size=(n_toroids,))
 
-    # create scales starting from the largest scale and moving down based on the ratio given
-    # with a start index of 0, the first scale will always be 2pi (minus epsilon to make the direction non-ambiguous)
-    # this is effectively the finest resolution that can be detected (though the scale into this rep is arbitrary)
-    scales = np.array([(np.pi - eps)/(scale_ratio**i) for i in range(scale_start_index, n_toroids+scale_start_index)])
+    # if the scale ration is set to 0, use a random distribution instead
+    if scale_ratio == 0:
+        scales = rng.uniform(-np.pi + eps, np.pi - eps, size=n_toroids)
+    else:
+        # create scales starting from the largest scale and moving down based on the ratio given with a start index of 0
+        # the first scale will always be 2pi (minus epsilon to make the direction non-ambiguous)
+        # this is effectively the finest resolution that can be detected (though the scale into this rep is arbitrary)
+        scales = np.array([(np.pi - eps)/(scale_ratio**i) for i in range(scale_start_index, n_toroids+scale_start_index)])
 
     xf = np.ones((dim,), dtype='complex64')
     yf = np.ones((dim,), dtype='complex64')
 
     for n in range(n_toroids):
+        phis_x, phis_y = get_proj_phi(n_proj=n_proj, phi=scales[n], angle=angles[n])
+        xf[1 + n * n_proj:1 + (n + 1) * n_proj] = phis_x
+        yf[1 + n * n_proj:1 + (n + 1) * n_proj] = phis_y
+
+    # set the appropriate conjugates
+    xf[-1:dim // 2:-1] = np.conj(xf[1:(dim + 1) // 2])
+    yf[-1:dim // 2:-1] = np.conj(yf[1:(dim + 1) // 2])
+    if dim % 2 == 0:
+        xf[dim // 2] = 1
+        yf[dim // 2] = 1
+
+    assert np.allclose(np.abs(xf), 1)
+    assert np.allclose(np.abs(yf), 1)
+    x = np.fft.ifft(xf).real
+    y = np.fft.ifft(yf).real
+    assert np.allclose(np.fft.fft(x), xf)
+    assert np.allclose(np.fft.fft(y), yf)
+    assert np.allclose(np.linalg.norm(x), 1)
+    assert np.allclose(np.linalg.norm(y), 1)
+
+    return spa.SemanticPointer(x), spa.SemanticPointer(y)
+
+
+def get_fixed_dim_variable_sub_toriod_axes(
+        dim=256,
+        rng=np.random,
+        eps=0.001,
+):
+
+    # total number of components that can be used
+    n_circles = (dim-1)//2
+
+    # Generate potiential sub-manifold dimensions.
+    # Commonly selecting 3, but allowing higher dimensions
+    # toroid_dims = np.ceil(1 + 2 * np.random.poisson(1, size=n_circles))
+    toroid_dims = np.floor(3 + np.random.poisson(1, size=n_circles))
+
+    # trim any excess, make the last dimension fit the remaining space
+    cumulative = 0
+    for i in range(n_circles):
+        if cumulative + toroid_dims[i] >= n_circles:
+            toroid_dims[i] = n_circles - cumulative
+            toroid_dims = toroid_dims[:i+1].copy()
+            n_toroids = i + 1
+            break
+        else:
+            cumulative += toroid_dims[i]
+
+    # Randomly select the angle for each toroid
+    angles = rng.uniform(0, 2*np.pi, size=(n_toroids,))
+
+    scales = rng.uniform(-np.pi + eps, np.pi - eps, size=n_toroids)
+
+    xf = np.ones((dim,), dtype='complex64')
+    yf = np.ones((dim,), dtype='complex64')
+
+    for n in range(n_toroids):
+        n_proj = int(toroid_dims[n])
         phis_x, phis_y = get_proj_phi(n_proj=n_proj, phi=scales[n], angle=angles[n])
         xf[1 + n * n_proj:1 + (n + 1) * n_proj] = phis_x
         yf[1 + n * n_proj:1 + (n + 1) * n_proj] = phis_y
