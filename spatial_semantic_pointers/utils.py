@@ -832,8 +832,8 @@ def get_fixed_dim_variable_sub_toriod_axes(
 
     # Generate potiential sub-manifold dimensions.
     # Commonly selecting 3, but allowing higher dimensions
-    # toroid_dims = np.ceil(1 + 2 * np.random.poisson(1, size=n_circles))
-    toroid_dims = np.floor(3 + np.random.poisson(1, size=n_circles))
+    # toroid_dims = np.ceil(1 + 2 * rng.poisson(1, size=n_circles))
+    toroid_dims = np.floor(3 + rng.poisson(1, size=n_circles))
 
     # trim any excess, make the last dimension fit the remaining space
     cumulative = 0
