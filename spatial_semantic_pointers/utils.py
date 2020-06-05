@@ -877,3 +877,81 @@ def get_fixed_dim_variable_sub_toriod_axes(
     assert np.allclose(np.linalg.norm(y), 1)
 
     return spa.SemanticPointer(x), spa.SemanticPointer(y)
+
+
+def orthogonal_unitary(dim, index, phi):
+
+    fv = np.ones(dim, dtype='complex64')
+    fv[index] = np.exp(1.j*phi)
+    fv[-index] = np.conj(fv[index])
+
+    assert np.allclose(np.abs(fv), 1)
+    v = np.fft.ifft(fv).real
+    assert np.allclose(np.fft.fft(v), fv)
+    assert np.allclose(np.linalg.norm(v), 1)
+    return v
+
+
+def get_centering_transformation(dim):
+    """
+    Generate a coordinate transformation matrix to:
+    make each orthogonal circle axis aligned, reduce dimensionality, and center the space around the global origin
+    Returns the transformation matrix and origin offset
+    """
+    n_indices = (dim-1)//2
+
+    # origin of the circle
+    origin_points = np.zeros((n_indices, dim))
+    # vector from origin of circle to origin of arc
+    cross_vectors = np.zeros((n_indices, dim))
+    # vector from origin of circle to 1/4 around the arc
+    angle_vectors = np.zeros((n_indices, dim))
+
+    # the starting point on the circle is the same in all cases
+    arc_origin = np.zeros((dim, ))
+    arc_origin[0] = 1
+
+    all_vectors = np.zeros((n_indices * 2, dim))
+    for index in range(n_indices):
+        u_cross = orthogonal_unitary(dim, index + 1, np.pi)
+        u_angle = orthogonal_unitary(dim, index + 1, np.pi/2.)
+
+        # midpoint of opposite ends of the circle
+        origin_points[index, :] = (arc_origin + u_cross) / 2.
+        cross_vectors[index, :] = arc_origin - origin_points[index, :]
+        angle_vectors[index, :] = u_angle - origin_points[index, :]
+
+        # ensuring vectors from the same circle are next to each other in the mapping
+        all_vectors[index*2, :] = cross_vectors[index, :]
+        all_vectors[index*2+1, :] = angle_vectors[index, :]
+
+        # check that spanning vectors are orthogonal
+        assert np.abs(np.dot(cross_vectors[index, :], angle_vectors[index, :])) < 0.0000001
+
+    # check that all basis vectors are orthogonal
+    for i in range(n_indices*2):
+        for j in range(i+1, n_indices*2):
+            assert np.abs(np.dot(all_vectors[i, :], all_vectors[j, :])) < 0.0000001
+
+    # smaller subspace spanned by SSPs
+    # (dim - 2) for even, (dim - 1) for odd
+    rot_dim = all_vectors.shape[0]
+
+    # rotate to the smaller space such that basis vectors are axis aligned
+    coord_rot_mat = np.linalg.lstsq(np.eye(rot_dim), all_vectors)[0]
+    # reverse transformation to check the offset
+    inv_coord_rot_mat = np.linalg.pinv(coord_rot_mat)
+
+    rot_origin = arc_origin @ coord_rot_mat.T
+    origin_back = rot_origin @ inv_coord_rot_mat.T
+    offset_vec = arc_origin - origin_back
+
+    # offset vector will be [1./dim, 1./dim, ...] for odd dim, or [2./dim, 0, 2./dim, 0, ....] for even dim
+    if dim % 2 == 0:
+        true_offset = np.zeros((dim, ))
+        true_offset[0::2] = 2. / dim
+    else:
+        true_offset = np.ones((dim,)) * 1. / dim
+    assert np.allclose(offset_vec, true_offset)
+
+    return coord_rot_mat, true_offset
