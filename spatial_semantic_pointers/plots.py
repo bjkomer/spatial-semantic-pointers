@@ -92,6 +92,8 @@ class SpatialHeatmap(object):
 
         xy = np.unravel_index(vs.argmax(), vs.shape)
 
+        vs = np.flipud(vs.T)  # flip and transpose to display correctly
+
         values = (self.cm(vs)*255).astype(np.uint8)
 
         self._nengo_html_ = image_svg(values)
